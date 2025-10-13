@@ -1,0 +1,129 @@
+---
+title: "Untitled"
+author: "Lona Uprety"
+date: "2025-10-13"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r}
+library(readr)
+bank <- read_csv("C:/Users/lona2/Downloads/UniversalBank (1).csv")
+View(bank)
+library(caret)
+library(e1071)
+library(dplyr)
+library(reshape2)
+```
+
+```{r}
+#Keep only the relevant columns
+bank1 <- bank %>% select(Online, CreditCard, `Personal Loan`)
+```
+
+```{r}
+#Rename columns
+colnames(bank1) <- c("Online", "CC", "Loan")
+```
+
+```{r}
+#Partition data
+set.seed(123)
+train_index <- createDataPartition(bank1$Loan, p = 0.6, list = FALSE)
+train <- bank1[train_index, ]
+valid <- bank1[-train_index, ]
+```
+
+```{r}
+#A) Pivot table
+pivot_table <- as.data.frame(table(train$CC, train$Loan, train$Online))
+colnames(pivot_table) <- c("CC", "Loan", "Online", "Count")
+pivot_table_cast <- dcast(pivot_table, CC + Loan ~ Online, value.var = "Count")
+pivot_table_cast
+```
+
+```{r}
+#B) Conditional probability
+cond_table <- table(train$Loan, train$CC, train$Online)
+p_L1_CC1_O1 <- cond_table["1", "1", "1"] / sum(cond_table[, "1", "1"])
+p_L1_CC1_O1
+
+#The probability that a customer who owns a bank credit card and actively uses online banking will accept a personal loan offer is about 10.7%. 
+```
+
+```{r}
+#C) Separate pivot table
+pivot_online <- table(train$Loan, train$Online)
+pivot_online
+
+pivot_cc <- table(train$Loan, train$CC)
+pivot_cc
+```
+
+```{r}
+#D) Compute probabilities
+# 1. P(CC = 1 | Loan = 1)
+P_CC1_L1 <- sum(train$CC == 1 & train$Loan == 1) / sum(train$Loan == 1)
+
+# 2. P(Online = 1 | Loan = 1)
+P_Online1_L1 <- sum(train$Online == 1 & train$Loan == 1) / sum(train$Loan == 1)
+
+# 3. P(Loan = 1)
+P_L1 <- mean(train$Loan == 1)
+
+# 4. P(CC = 1 | Loan = 0)
+P_CC1_L0 <- sum(train$CC == 1 & train$Loan == 0) / sum(train$Loan == 0)
+
+# 5. P(Online = 1 | Loan = 0)
+P_Online1_L0 <- sum(train$Online == 1 & train$Loan == 0) / sum(train$Loan == 0)
+
+# 6. P(Loan = 0)
+P_L0 <- mean(train$Loan == 0)
+
+# Display all
+data.frame(
+  Metric = c("P(CC=1|Loan=1)", "P(Online=1|Loan=1)", "P(Loan=1)",
+             "P(CC=1|Loan=0)", "P(Online=1|Loan=0)", "P(Loan=0)"),
+  Probability = c(P_CC1_L1, P_Online1_L1, P_L1, P_CC1_L0, P_Online1_L0, P_L0)
+)
+```
+
+```{r}
+#E) Naive bayes probability
+num <- P_L1 * P_CC1_L1 * P_Online1_L1
+den <- num + (P_L0 * P_CC1_L0 * P_Online1_L0)
+P_L1_given_CC1_O1 <- num / den
+P_L1_given_CC1_O1
+
+#A customer who owns a bank credit card and actively uses online banking services has about an 11.1% chance of accepting the personal loan offer.
+```
+
+```{r}
+#F) Compare results
+comparison <- data.frame(
+  Source = c("Pivot Table", "Naive Bayes Formula"),
+  Probability = c(p_L1_CC1_O1, P_L1_given_CC1_O1)
+)
+comparison
+
+#While both estimates are similar, the Naive Bayes result is typically considered more reliable because it uses all available data amd smooths out potential sampling variation. 
+```
+
+```{r}
+#G) Run naive bayes model
+train$Online <- as.factor(train$Online)
+train$CC <- as.factor(train$CC)
+train$Loan <- as.factor(train$Loan)
+
+model_nb <- naiveBayes(Loan ~ Online + CC, data = train)
+model_nb
+
+# Predict probability for CC=1 and Online=1
+new_customer <- data.frame(Online = factor(1, levels = c(0,1)),
+                           CC = factor(1, levels = c(0,1)))
+predict(model_nb, new_customer, type = "raw")
+
+#The probability computed manually using the Naive Bayes formula is identical to the probability produced by the Naive Bayes model. A customer who has a credit card and uses online banking has about an 11.1% chance of accepting the personal loan offer.
+```
+
