@@ -1,0 +1,99 @@
+---
+title: "ML Assignment 4 2025"
+author: "Lona Uprety"
+date: "2025-10-26"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r}
+library(readr)
+Pharmaceuticals <- read_csv("C:/Users/lona2/Downloads/Pharmaceuticals.csv")
+View(Pharmaceuticals)
+```
+
+```{r}
+#Load the libraries
+library(tidyverse)
+library(cluster)
+library(factoextra)
+```
+
+```{r}
+#Inspect data
+head(Pharmaceuticals)
+summary(Pharmaceuticals)
+```
+
+```{r}
+#Selecet numeric variables (3-11)
+numeric_data <- Pharmaceuticals[, 3:11]
+```
+
+```{r}
+#Data preprocessing
+if(all(numeric_data[,1] > 0)){
+numeric_data[,1] <- log10(numeric_data[,1])
+}
+scaled_data <- scale(numeric_data)
+```
+
+```{r}
+#Determine number of clusters
+set.seed(123)
+fviz_nbclust(scaled_data, kmeans, method = 'silhouette') +
+ggtitle('Silhouette Method for Optimal K')
+```
+
+```{r}
+#Apply K-means clustering
+set.seed(123)
+km <- kmeans(scaled_data, centers = 5, nstart = 25)
+Pharmaceuticals$Cluster <- as.factor(km$cluster)
+# a) 
+#K-means clustering method was applied to 21 pharmaceutical companies using numeric varibales, standarized with z-scores. The silhouette method identified 5 optimal clusters (k=5). 
+```
+
+```{r}
+#Visualize cluster
+fviz_cluster(km, data = scaled_data, geom = "point", 
+             ellipse = FALSE, main = "K-means Clusters (k = 5)")
+```
+
+```{r}
+#Interpert clusters
+aggregate(numeric_data, by = list(Cluster = Pharmaceuticals$Cluster), mean)
+# b)
+#1: stable mid-size firms with healthy returns and consistent growth
+#2: financially dominant firms with strong performance and global stability
+#3: highly leveraged, volatile small firms with weak performance
+#4: possibly overvalued or growth-speculative companies with low profitability
+#5: firms in expansion phase showing strong top-line growth despite moderate returns
+```
+
+```{r}
+#Check patterns for other variables
+table(Pharmaceuticals$Cluster, Pharmaceuticals$Median_Recommendation)
+table(Pharmaceuticals$Cluster, Pharmaceuticals$Location)
+table(Pharmaceuticals$Cluster, Pharmaceuticals$Exchange)
+# c)
+#1: Mostly Hold/Moderate Buy; mainly U.S./Europe firms on NYSE.
+#2: Strong Hold/Moderate Buy sentiment; U.S./UK firms, all NYSE-listed.
+#3: Single Moderate Buy; small U.S. firm on NASDAQ.
+#4: Mostly Hold; smaller firms in Canada, Germany, and U.S., NYSE-listed.
+#5: Mix of Hold/Moderate Sell; U.S./Ireland firms on NYSE/AMEX.
+
+#Summary:
+#Larger, stable firms (Clusters 1–2) dominate the NYSE and have positive analyst sentiment, while smaller or niche firms (Clusters 3–5) are more varied in exchange and rating.
+```
+
+```{r}
+# d) Name the clusters
+#1: stable performers
+#2: global market leaders
+#3: high risk niche player
+#4: speculative growth firms
+#5: emerging growth companies
+```
+
