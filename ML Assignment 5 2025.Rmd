@@ -1,0 +1,164 @@
+---
+title: "Untitled"
+author: "Lona Uprety"
+date: "2025-11-24"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r}
+library(readr)
+Cereals <- read_csv("C:/Users/lona2/Downloads/Cereals (1).csv")
+View(Cereals)
+```
+
+```{r}
+# Load packages
+library(tidyverse)
+library(cluster)
+library(factoextra)
+```
+
+```{r}
+# Clean data
+# Remove cereals with missing values
+cereals_clean <- na.omit(Cereals)
+
+# Keep numeric columns only (clustering requires numeric)
+cereal_num <- cereals_clean %>% select_if(is.numeric)
+```
+
+```{r}
+# Normalize data
+cereal_norm <- scale(cereal_num)
+```
+
+```{r}
+# Hierarchical clustering with agnes
+agnes_single   <- agnes(cereal_norm, method = "single")
+agnes_complete <- agnes(cereal_norm, method = "complete")
+agnes_average  <- agnes(cereal_norm, method = "average")
+agnes_ward     <- agnes(cereal_norm, method = "ward")
+
+# Compare methods using agglomerative coefficient
+agnes_single$ac
+agnes_complete$ac
+agnes_average$ac
+agnes_ward$ac
+```
+
+```{r}
+#Ward's method is the best method because it produced the highest agglomerative coefficient. 
+```
+
+
+```{r}
+# Choose best method and plot dendrogram 
+# Convert AGNES object to hclust
+hc_ward <- as.hclust(agnes_ward)
+
+# Dendrogram
+plot(hc_ward,
+     main = "Hierarchical Clustering - Ward Linkage",
+     xlab = "",
+     sub = "",
+     cex = 0.6)
+
+# Add rectangles for 3 clusters
+rect.hclust(hc_ward, k = 3, border = "red")
+
+```
+
+```{r}
+# Choose number of clusters
+
+library(cluster)
+
+sil_width <- c()
+
+for (k in 2:6) {
+  hc <- hclust(dist(cereal_norm), method = "ward.D2")
+  cluster_cut <- cutree(hc, k = k)
+  
+  sil <- silhouette(cluster_cut, dist(cereal_norm))
+  sil_width[k] <- mean(sil[, 3])
+}
+
+# Plot silhouette scores in base R
+plot(2:6, sil_width[2:6],
+     type = "b",
+     pch = 19,
+     xlab = "Number of clusters (k)",
+     ylab = "Average Silhouette Width",
+     main = "Silhouette Method (Base R)")
+
+```
+
+```{r}
+#I would choose three clusters because three clusters gives the strongest separation and highest internal consistency.
+```
+
+
+```{r}
+set.seed(123)
+
+# Split dataset into A and B
+n <- nrow(cereal_norm)
+idx <- sample(1:n, n/2)
+A <- cereal_norm[idx, ]
+B <- cereal_norm[-idx, ]
+```
+
+```{r}
+# Cluster partition A using Ward
+hc_A <- hclust(dist(A), method = "ward.D2")
+clusters_A <- cutree(hc_A, k = 3)
+
+# Get centroids of clusters A
+centroids <- aggregate(A, by = list(cluster = clusters_A), FUN = mean)
+centroids_mat <- as.matrix(centroids[, -1])
+
+# Assign each record in B to nearest centroid
+assign_to_centroid <- function(record, centroids) {
+  dists <- apply(centroids, 1, function(c) sum((record - c)^2))
+  which.min(dists)
+}
+
+assigned_B <- apply(B, 1, assign_to_centroid, centroids = centroids_mat)
+```
+
+```{r}
+# Now get cluster assignments from clustering ALL data
+hc_all <- hclust(dist(cereal_norm), method = "ward.D2")
+clusters_all <- cutree(hc_all, k = 3)
+```
+
+```{r}
+# Compare for records in B only
+consistency <- table(assigned_B, clusters_all[-idx])
+consistency
+```
+
+```{r}
+#Cluster 2 shows very strong stability, with all assigned records matching the full-data cluster. Clusters 1 and 3 show moderate stability, with some overlap in cluster assignments. Overall, the clustering structure is fairly stable, but clusters 1 and 3 exhibit more uncertainty compared to cluster 2.
+```
+
+
+```{r}
+# Add cluster labels to original cereal data
+cereal_clusters <- cereals_clean
+cereal_clusters$cluster <- clusters_all
+
+# Compare cluster health profiles
+cluster_summary <- cereal_clusters %>%
+  group_by(cluster) %>%
+  summarise(across(c(calories, sugars, fiber, protein), mean))
+
+cluster_summary
+```
+
+```{r}
+#Cluster 3 represents the healthiest group of cereals. It contains cereals with the lowest sugar (3.03 g), lowest calories (97.33 kcal), and moderate levels of fiber and protein. This cluster is most appropriate for daily school cafeteria use.
+```
+
